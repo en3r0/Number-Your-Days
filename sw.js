@@ -8,7 +8,7 @@
 //
 // Bump CACHE_NAME on every shipped change to evict the old cache cleanly.
 
-const CACHE_NAME = "nyd-v1";
+const CACHE_NAME = "nyd-v2";
 const PRECACHE = ["./", "./index.html"];
 
 self.addEventListener("install", (event) => {

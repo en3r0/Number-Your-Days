@@ -655,6 +655,7 @@
   }
   .nw-form input {
     flex: 1;
+    min-width: 0;
     font-family: var(--display);
     font-style: italic;
     font-size: 18px;
@@ -806,6 +807,10 @@
     .decade-labels { width: 24px; }
     .decade-label { right: 6px; }
     .grid-meta { padding-left: 24px; padding-right: 4px; }
+    .hero .form .btn { flex: 1 0 100%; margin-top: 4px; }
+    .nw-form { flex-direction: column; align-items: stretch; gap: 6px; }
+    .nw-form input { border-right: 1px solid var(--rule); }
+    .nw-form .btn { border-left: 1px solid var(--ink); }
   }
 
   /* REDUCED MOTION */
@@ -869,7 +874,6 @@
         <select id="bdYear" aria-label="Year"></select>
         <button type="submit" id="showBtn" class="btn">See my weeks</button>
       </form>
-      <p class="footnote" style="margin-top: 18px;">Your birthdate stays in your browser. We never send it anywhere.</p>
     </div>
   </section>
 
@@ -887,8 +891,8 @@
         </h2>
         <p class="lede">
           Every box is one week. The dark ones are gone.
-          The gold one is breathing. The cream is what may yet be &mdash;
-          <em>if the Lord wills</em>.
+          The gold one is this week. The cream boxes are what may yet be &mdash;
+          <em>if the Lord grants you the average</em>.
         </p>
       </div>
 
@@ -1069,13 +1073,13 @@
         </div>
 
         <div id="nwBefore" class="hidden">
-          <div class="eyebrow nw-prompt-eyebrow">What is this week for?</div>
+          <div class="eyebrow nw-prompt-eyebrow">What will you do this week that matters?</div>
           <form class="nw-form" id="nwForm">
             <input type="text" id="nwInput" placeholder="A meal with my parents. Sabbath kept. The hard apology…" maxlength="120" autocomplete="off" />
             <button type="submit" class="btn">Number it</button>
           </form>
           <p class="footnote" style="margin-top: 14px;">
-            One sentence. Prayerful. Specific. The kind of thing you&rsquo;ll be glad of on Sunday.
+            One sentence. Prayerful. Specific. The kind of thing you will remember after the week is over.
           </p>
         </div>
 
@@ -1624,7 +1628,7 @@
     const fullMoonsRemaining = Math.floor(daysRemaining / 29.5);
     const items = [
       { big: fmt(sundaysRemaining), small: "Sundays of worship and rest remain.", cap: "If the Lord grants you average days." },
-      { big: fmt(christmasesRemaining), small: "Christmas mornings, give or take.", cap: "About once a year. Make them count." },
+      { big: fmt(christmasesRemaining), small: "Christmas mornings, give or take.", cap: "Once a year. Make them count." },
       { big: fmt(summersRemaining), small: "Summers. Then the cool of autumn.", cap: "Ecclesiastes 3 · a season for everything." },
       { big: fmt(fullMoonsRemaining), small: "Full moons left to look up at.", cap: "“When I consider your heavens…” Psalm 8 · 3" },
     ];
@@ -1658,12 +1662,28 @@
 
   // ─── Number this week ──────────────────────────────────────────────────────
 
+  // Date-based "year of life" + "week of year" — avoids the 52.18-week drift
+  // that integer-divides weeksLived/52 would introduce over decades.
+  function computeYearAndWeek(birthdate, now) {
+    const birth = new Date(birthdate + "T00:00:00");
+    let yearsLived = now.getFullYear() - birth.getFullYear();
+    const monthDiff = now.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) {
+      yearsLived--;
+    }
+    const lastBirthday = new Date(now.getFullYear(), birth.getMonth(), birth.getDate());
+    if (lastBirthday > now) lastBirthday.setFullYear(lastBirthday.getFullYear() - 1);
+    lastBirthday.setHours(0, 0, 0, 0);
+    const daysSinceBirthday = Math.floor((now - lastBirthday) / MS_PER_DAY);
+    const weekOfYear = Math.min(51, Math.max(0, Math.floor(daysSinceBirthday / 7)));
+    return { age: yearsLived, weekOfYear };
+  }
+
   function renderNumberWeek(weeksLived) {
     const weekNumber = weeksLived + 1;
-    const weekOfYear = weeksLived % 52;
-    const yearOfLife = Math.floor(weeksLived / 52) + 1;
+    const { age, weekOfYear } = computeYearAndWeek(currentState.birthdate, new Date());
     $("weekNum").textContent = "Week " + fmt(weekNumber);
-    $("weekMeta").textContent = "year " + yearOfLife + " of your life · week " + (weekOfYear + 1) + " of 52";
+    $("weekMeta").textContent = "age " + age + " · week " + (weekOfYear + 1) + " of 52";
     const cells = Array.from({ length: 52 }).map((_, i) => {
       let cls = "cell";
       if (i < weekOfYear) cls += " lived";
@@ -2017,12 +2037,11 @@
     ctx.stroke();
     y += 28;
 
-    const weekOfYear = weeksLived % 52;
-    const yearOfLife = Math.floor(weeksLived / 52) + 1;
+    const { age, weekOfYear } = computeYearAndWeek(state.birthdate, new Date());
     ctx.fillStyle = "#6b5b46";
     ctx.font = '500 13px ui-monospace, "SF Mono", Menlo, monospace';
     if ("letterSpacing" in ctx) ctx.letterSpacing = "3px";
-    ctx.fillText("YEAR " + yearOfLife + " OF YOUR LIFE  ·  WEEK " + (weekOfYear + 1) + " OF 52", W / 2, y);
+    ctx.fillText("AGE " + age + "  ·  WEEK " + (weekOfYear + 1) + " OF 52", W / 2, y);
     if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
     y += 50;
 
@@ -2161,6 +2180,16 @@
   fillPlaceholderSummers();
   fillEmptyNwMiniRow();
   drawGrid(-1);
+
+  const NW_PLACEHOLDER_FULL = "A meal with my parents. Sabbath kept. The hard apology…";
+  const NW_PLACEHOLDER_SHORT = "A meal with my parents…";
+  function updateNwPlaceholder() {
+    const el = $("nwInput");
+    if (!el) return;
+    el.placeholder = window.innerWidth <= 600 ? NW_PLACEHOLDER_SHORT : NW_PLACEHOLDER_FULL;
+  }
+  updateNwPlaceholder();
+  window.addEventListener("resize", updateNwPlaceholder);
 
   $("bdMonth").addEventListener("change", refreshDayOptions);
   $("bdYear").addEventListener("change", refreshDayOptions);
